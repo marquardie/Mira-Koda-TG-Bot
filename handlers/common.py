@@ -1,0 +1,97 @@
+"""Shared keyboard builders and small formatting helpers.
+
+Menu model:
+* A **persistent ReplyKeyboard** at the bottom of the chat carries the main
+  navigation (book / my bookings / profile / rules). It is always visible, so
+  users never have to scroll to find buttons.
+* **InlineKeyboard** buttons are used only for *actions* inside specific
+  flows: picking a slot, confirming a cancel, choosing "back", etc.
+"""
+from __future__ import annotations
+
+from telegram import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    KeyboardButton,
+    ReplyKeyboardMarkup,
+)
+
+from services import storage
+from services.texts import get_text
+
+# Callback-data for the inline "back to menu" button used across flows.
+CB_BACK = "back"
+
+
+def main_menu_keyboard() -> ReplyKeyboardMarkup:
+    """Persistent main-menu keyboard shown under every bot message."""
+    return ReplyKeyboardMarkup(
+        [
+            [KeyboardButton(get_text("menu_book"))],
+            [KeyboardButton(get_text("menu_my_bookings"))],
+            [KeyboardButton(get_text("menu_profile"))],
+            [KeyboardButton(get_text("menu_rules"))],
+        ],
+        resize_keyboard=True,
+        is_persistent=True,
+    )
+
+
+def menu_labels() -> set[str]:
+    """Set of all main-menu button labels — used by the text router."""
+    return {
+        get_text("menu_book"),
+        get_text("menu_my_bookings"),
+        get_text("menu_profile"),
+        get_text("menu_rules"),
+    }
+
+
+def back_button_row() -> list[InlineKeyboardButton]:
+    """Reusable single-button row for inline flows."""
+    return [InlineKeyboardButton(get_text("btn_back"), callback_data=CB_BACK)]
+
+
+def confirm_cancel_keyboard(confirm_cb: str, cancel_cb: str) -> InlineKeyboardMarkup:
+    """Two-button dialog (Confirm / Cancel) used by the slot-confirm step."""
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(get_text("btn_confirm"), callback_data=confirm_cb),
+                InlineKeyboardButton(get_text("btn_cancel"), callback_data=cancel_cb),
+            ],
+            back_button_row(),
+        ]
+    )
+
+
+STATUS_TEXT_KEYS = {
+    "pending_payment": "status_pending",
+    "waiting_confirm": "status_waiting_confirm",
+    "confirmed": "status_confirmed",
+    "done": "status_done",
+    "cancelled": "status_cancelled",
+}
+
+
+def status_text(status: str) -> str:
+    return get_text(STATUS_TEXT_KEYS.get(status, "status_pending"))
+
+
+# ---------------------------------------------------------------------------
+# Ukrainian-friendly date formatting
+# ---------------------------------------------------------------------------
+
+UA_MONTHS_GEN = {
+    1: "січня", 2: "лютого", 3: "березня", 4: "квітня",
+    5: "травня", 6: "червня", 7: "липня", 8: "серпня",
+    9: "вересня", 10: "жовтня", 11: "листопада", 12: "грудня",
+}
+
+
+def format_slot_human(slot_str: str) -> str:
+    """Convert a raw slot string to "17 квітня о 12:00"."""
+    dt = storage.parse_slot(slot_str)
+    if dt is None:
+        return slot_str
+    return f"{dt.day} {UA_MONTHS_GEN[dt.month]} о {dt.strftime('%H:%M')}"
