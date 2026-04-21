@@ -26,8 +26,8 @@ CB_RETURNING_CLIENT = "ct:ret"
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Entry point: returning users see the menu; new users pick client type."""
     user = update.effective_user
-    if storage.user_exists(user.id):
-        profile_data = storage.get_user(user.id) or {}
+    profile_data = storage.get_user(user.id) or {}
+    if profile_data.get("questionnaire_done"):
         await update.message.reply_text(
             get_text("welcome_returning", name=profile_data.get("name", user.first_name or "")),
             reply_markup=main_menu_keyboard(),
@@ -60,7 +60,10 @@ async def on_client_type(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         storage.save_user(uid, {"tg_username": update.effective_user.username or "", "questionnaire_done": False})
     client_type = "returning" if query.data == CB_RETURNING_CLIENT else "new"
     storage.save_user(uid, {"client_type": client_type})
-    await query.edit_message_text(get_text("q_name"))
+    try:
+        await query.edit_message_text(get_text("q_name"))
+    except Exception:
+        await update.effective_chat.send_message(get_text("q_name"))
     return Q_NAME
 
 
@@ -140,7 +143,7 @@ def build_start_conversation() -> ConversationHandler:
             CommandHandler("cancel", cancel),
             CommandHandler("start", already_in_anketa),
         ],
-        allow_reentry=False,
+        allow_reentry=True,
         per_chat=True,
         per_user=True,
     )
