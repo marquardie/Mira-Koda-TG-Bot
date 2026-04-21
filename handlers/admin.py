@@ -239,6 +239,7 @@ async def handle_admin_callbacks(update: Update, context: ContextTypes.DEFAULT_T
         return
     q = update.callback_query
     data = q.data or ""
+    logger.info("admin callback user=%s data=%s", update.effective_user.id, data)
 
     # Back to the main panel.
     if data == CB_MENU:

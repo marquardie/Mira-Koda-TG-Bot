@@ -11,9 +11,13 @@ from telegram.ext import (
     filters,
 )
 
+import logging
+
 from handlers.common import format_slot_human, main_menu_keyboard, status_text
 from services import storage
 from services.texts import get_text
+
+logger = logging.getLogger(__name__)
 
 # Conversation states — Q_CLIENT_TYPE is the new first step (inline buttons),
 # Q_MEDICATION was merged into Q_DIAGNOSIS so the constant is recycled.
@@ -53,6 +57,7 @@ async def on_client_type(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     conversation state was lost after a server restart.
     """
     query = update.callback_query
+    logger.info("on_client_type fired user=%s data=%s", update.effective_user.id, query.data)
     await query.answer()
     uid = update.effective_user.id
     # Guard: if bot restarted before user record was saved, create it now.

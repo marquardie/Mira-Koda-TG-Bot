@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 
+from telegram import Update
 from telegram.ext import Application, CommandHandler
 
 from config import BOT_TOKEN, ensure_config
@@ -53,7 +54,7 @@ def main() -> None:
     ensure_config()
     app = build_app()
     logger.info("Bot is starting…")
-    app.run_polling(allowed_updates=None)
+    app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
 if __name__ == "__main__":
