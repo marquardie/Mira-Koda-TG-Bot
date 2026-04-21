@@ -143,6 +143,7 @@ def build_start_conversation() -> ConversationHandler:
         allow_reentry=False,
         per_chat=True,
         per_user=True,
+        per_message=True,
     )
 
 
