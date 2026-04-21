@@ -567,6 +567,12 @@ async def on_menu_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             await profile(update, context)
         elif text == get_text("menu_rules"):
             await update.message.reply_text(get_text("rules_menu"), reply_markup=main_menu_keyboard())
+        elif text == get_text("menu_package"):
+            from handlers.payment import package_offer_keyboard
+            await update.message.reply_text(
+                get_text("package_offer_card"),
+                reply_markup=package_offer_keyboard(),
+            )
         return
 
     # (2) Admin-side awaiting (msg-to-client, range-add conversation).

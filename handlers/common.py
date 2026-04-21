@@ -23,18 +23,21 @@ from services.texts import get_text
 CB_BACK = "back"
 
 
-def main_menu_keyboard() -> ReplyKeyboardMarkup:
-    """Persistent main-menu keyboard shown under every bot message."""
-    return ReplyKeyboardMarkup(
-        [
-            [KeyboardButton(get_text("menu_book"))],
-            [KeyboardButton(get_text("menu_my_bookings"))],
-            [KeyboardButton(get_text("menu_profile"))],
-            [KeyboardButton(get_text("menu_rules"))],
-        ],
-        resize_keyboard=True,
-        is_persistent=True,
-    )
+def main_menu_keyboard(show_package: bool = False) -> ReplyKeyboardMarkup:
+    """Persistent main-menu keyboard shown under every bot message.
+
+    ``show_package=True`` adds the "💼 Оформити пакет" button (for returning
+    clients or those with 3+ completed sessions).
+    """
+    rows = [
+        [KeyboardButton(get_text("menu_book"))],
+        [KeyboardButton(get_text("menu_my_bookings"))],
+        [KeyboardButton(get_text("menu_profile"))],
+        [KeyboardButton(get_text("menu_rules"))],
+    ]
+    if show_package:
+        rows.insert(1, [KeyboardButton(get_text("menu_package"))])
+    return ReplyKeyboardMarkup(rows, resize_keyboard=True, is_persistent=True)
 
 
 def menu_labels() -> set[str]:
@@ -44,7 +47,21 @@ def menu_labels() -> set[str]:
         get_text("menu_my_bookings"),
         get_text("menu_profile"),
         get_text("menu_rules"),
+        get_text("menu_package"),
     }
+
+
+def user_can_see_package(user_id: int) -> bool:
+    """True if user should see the package button (returning OR 3+ sessions)."""
+    u = storage.get_user_with_defaults(user_id)
+    if not u or u.get("package_active"):
+        return False
+    return u.get("client_type") == "returning" or u.get("sessions_completed", 0) >= 3
+
+
+def main_menu_for(user_id: int) -> ReplyKeyboardMarkup:
+    """Build the right menu for a specific user (with or without package btn)."""
+    return main_menu_keyboard(show_package=user_can_see_package(user_id))
 
 
 def back_button_row() -> list[InlineKeyboardButton]:

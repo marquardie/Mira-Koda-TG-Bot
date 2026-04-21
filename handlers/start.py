@@ -13,7 +13,7 @@ from telegram.ext import (
 
 import logging
 
-from handlers.common import format_slot_human, main_menu_keyboard, status_text
+from handlers.common import format_slot_human, main_menu_for, main_menu_keyboard, status_text
 from services import storage
 from services.texts import get_text
 
@@ -34,7 +34,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     if profile_data.get("questionnaire_done"):
         await update.message.reply_text(
             get_text("welcome_returning", name=profile_data.get("name", user.first_name or "")),
-            reply_markup=main_menu_keyboard(),
+            reply_markup=main_menu_for(user.id),
         )
         return ConversationHandler.END
 
@@ -117,7 +117,7 @@ async def q_diagnosis(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
             "package_offered": False,
         },
     )
-    await update.message.reply_text(get_text("q_saved"), reply_markup=main_menu_keyboard())
+    await update.message.reply_text(get_text("q_saved"), reply_markup=main_menu_for(user_id))
     return ConversationHandler.END
 
 
@@ -203,12 +203,11 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     else:
         text += get_text("profile_bookings_empty")
 
-    # Package CTA for eligible returning clients.
+    # Package CTA — available to ANY client after 3 completed sessions.
     from handlers.payment import CB_PKG_BUY
-    markup = main_menu_keyboard()
-    if (user.get("sessions_completed", 0) >= 3
-            and not user.get("package_active")
-            and user.get("client_type") == "returning"):
+    markup = main_menu_for(user_id)
+    if (user.get("sessions_completed", 0) >= 3 or user.get("client_type") == "returning") \
+            and not user.get("package_active"):
         await update.message.reply_text(text, reply_markup=markup)
         await update.message.reply_text(
             get_text("package_offer_card"),
