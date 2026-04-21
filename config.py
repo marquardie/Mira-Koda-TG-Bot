@@ -21,7 +21,7 @@ MONOBANK_NAME: str = os.getenv("MONOBANK_NAME", "Mira Koda")
 
 # Slot-hold window: if the user picks a slot but never completes payment,
 # the slot is auto-released after this many minutes.
-SLOT_HOLD_MINUTES: int = 15
+SLOT_HOLD_MINUTES: int = 720
 
 # Storage paths
 STORAGE_DIR = BASE_DIR / "storage"

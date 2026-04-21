@@ -9,12 +9,15 @@
   "menu_rules": "📌 Правила",
   "menu_help": "ℹ️ Допомога",
 
+  "client_type_prompt": "Оберіть, будь ласка:",
+  "btn_new_client": "Я новий клієнт",
+  "btn_returning_client": "Я постійний клієнт",
+
   "q_name": "Як до вас звертатися? (ім'я)",
   "q_age": "Скільки вам років?",
   "q_request": "Який у вас запит? Напишіть, будь ласка, коротко, що привело вас зараз на консультацію ✍🏻\n\n📌 Водночас хочу одразу зазначити: я не працюю з такими темами:\n• алкогольна та наркотична залежність\n• розлади харчової поведінки (РХП)\n• ПТСР\n• сексуальне насильство як основний запит\n• гостре переживання втрати як основний запит",
   "q_experience": "Чи був у вас раніше досвід психотерапії? Якщо так, розкажіть, будь ласка, коротко.",
-  "q_diagnosis": "Чи є у вас встановлені психіатричні або неврологічні діагнози? Якщо ні, напишіть, будь ласка, «немає».",
-  "q_medication": "Також підкажіть, чи приймаєте ви зараз будь-які препарати. Якщо ні — напишіть «немає».",
+  "q_diagnosis": "Чи є у вас встановлені психіатричні або неврологічні діагнози?\n\nТакож підкажіть, чи приймаєте ви зараз будь-які препарати.\n\nЯкщо ні — напишіть «немає».",
 
   "q_age_invalid": "Будь ласка, вкажіть вік цифрами (наприклад: 27).",
   "q_saved": "Дякую! Анкету збережено ✨",
@@ -104,7 +107,7 @@
   "status_done": "завершено",
   "status_cancelled": "скасовано",
 
-  "profile_header": "👤 {name}\nВік: {age}\nЗапит: {request}\nДосвід терапії: {experience}\nДіагнози: {diagnosis}\nМедикаменти: {medication}\n\n📊 Статистика:\n✅ Пройдено: {sessions_completed}\n❌ Скасовано: {sessions_cancelled}\n🔁 Безкоштовні переноси: {free_cancellations_left}\n💼 Пакет: {package_status}\nСесій на балансі: {available_sessions}",
+  "profile_header": "👤 {name}\nВік: {age}\nЗапит: {request}\nДосвід терапії: {experience}\nДіагнози / медикаменти: {diagnosis}\n\n📊 Статистика:\n✅ Пройдено: {sessions_completed}\n❌ Скасовано: {sessions_cancelled}\n🔁 Безкоштовні переноси: {free_cancellations_left}\n💼 Пакет: {package_status}\nСесій на балансі: {available_sessions}",
   "package_status_active": "активний (залишилось {left})",
   "package_status_inactive": "не активний",
   "profile_bookings_header": "\n\n📁 Ваші активні записи:",
@@ -136,7 +139,7 @@
   "admin_clients_empty": "Поки що немає клієнтів.",
   "admin_clients_line": "• {name} (@{username}) — {sessions} сесій",
 
-  "admin_client_profile": "👤 {name}\nВік: {age}\nЗапит: {request}\nДосвід терапії: {experience}\nДіагнози: {diagnosis}\nМедикаменти: {medication}\n\n💼 Сесії:\n• Пройдено: {sessions_completed}\n• Доступно: {available_sessions}\n\n🔁 Скасування:\n• Використано: {sessions_cancelled}\n• Безкоштовних залишилось: {free_cancellations_left}",
+  "admin_client_profile": "👤 {name}\nВік: {age}\nЗапит: {request}\nДосвід терапії: {experience}\nДіагнози / медикаменти: {diagnosis}\n\n💼 Сесії:\n• Пройдено: {sessions_completed}\n• Доступно: {available_sessions}\n\n🔁 Скасування:\n• Використано: {sessions_cancelled}\n• Безкоштовних залишилось: {free_cancellations_left}",
   "admin_client_future_header": "\n\n📅 Майбутні записи:",
   "admin_client_future_empty": "\n\n📅 Майбутніх записів немає.",
   "admin_btn_cancel_bk": "❌ Скасувати запис",
@@ -221,6 +224,19 @@
   "admin_day_empty": "На цю дату записів немає.",
   "admin_day_slot_line": "{time} — {status}",
   "admin_day_slot_booked": "{time} — {name}",
+
+  "use_buttons_hint": "Будь ласка, скористайтеся кнопками меню 👇",
+  "admin_del_clients_title": "🗑 Оберіть клієнта для видалення:",
+  "admin_del_confirm_prompt": "Видалити клієнта {name} (id: {user_id})? Усі активні записи будуть скасовані.",
+  "admin_btn_del_confirm": "🗑 Так, видалити",
+  "admin_btn_del_cancel": "❌ Скасувати",
+  "admin_del_done": "Клієнта видалено ✅",
+  "admin_del_not_found": "Клієнта не знайдено.",
+  "admin_menu_del_client": "🗑 Видалити клієнта",
+  "admin_del_slots_title": "🗑 Оберіть слот для видалення:",
+  "admin_del_slot_confirm": "Видалити слот {slot}?",
+  "admin_del_slot_done": "Слот видалено ✅",
+  "admin_btn_del_slots": "🗑 Видалити слот",
 
   "error_generic": "Упс, щось пішло не так. Спробуйте ще раз.",
   "cancelled": "Дію скасовано.",

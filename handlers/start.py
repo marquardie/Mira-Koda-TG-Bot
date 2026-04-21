@@ -1,8 +1,9 @@
-"""/start command and the questionnaire for new users."""
+"""/start command, client-type picker, and the questionnaire."""
 from __future__ import annotations
 
-from telegram import Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
+    CallbackQueryHandler,
     CommandHandler,
     ContextTypes,
     ConversationHandler,
@@ -14,12 +15,16 @@ from handlers.common import format_slot_human, main_menu_keyboard, status_text
 from services import storage
 from services.texts import get_text
 
-# Conversation states for the questionnaire
-Q_NAME, Q_AGE, Q_REQUEST, Q_EXPERIENCE, Q_DIAGNOSIS, Q_MEDICATION = range(6)
+# Conversation states — Q_CLIENT_TYPE is the new first step (inline buttons),
+# Q_MEDICATION was merged into Q_DIAGNOSIS so the constant is recycled.
+Q_CLIENT_TYPE, Q_NAME, Q_AGE, Q_REQUEST, Q_EXPERIENCE, Q_DIAGNOSIS = range(6)
+
+CB_NEW_CLIENT = "ct:new"
+CB_RETURNING_CLIENT = "ct:ret"
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Entry point: branch on whether user has finished the questionnaire."""
+    """Entry point: returning users see the menu; new users pick client type."""
     user = update.effective_user
     if storage.user_exists(user.id):
         profile_data = storage.get_user(user.id) or {}
@@ -29,11 +34,25 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         )
         return ConversationHandler.END
 
-    # New user → start questionnaire (no reply keyboard yet — keep the chat
-    # focused on one input at a time).
     storage.save_user(user.id, {"tg_username": user.username or "", "questionnaire_done": False})
     await update.message.reply_text(get_text("welcome_new"))
-    await update.message.reply_text(get_text("q_name"))
+    await update.message.reply_text(
+        get_text("client_type_prompt"),
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton(get_text("btn_new_client"), callback_data=CB_NEW_CLIENT)],
+            [InlineKeyboardButton(get_text("btn_returning_client"), callback_data=CB_RETURNING_CLIENT)],
+        ]),
+    )
+    return Q_CLIENT_TYPE
+
+
+async def on_client_type(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """User picks 'new' or 'returning'. Both paths lead to the questionnaire."""
+    query = update.callback_query
+    await query.answer()
+    client_type = "returning" if query.data == CB_RETURNING_CLIENT else "new"
+    storage.save_user(update.effective_user.id, {"client_type": client_type})
+    await query.edit_message_text(get_text("q_name"))
     return Q_NAME
 
 
@@ -66,17 +85,13 @@ async def q_experience(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 
 
 async def q_diagnosis(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    storage.save_user(update.effective_user.id, {"diagnosis": update.message.text.strip()})
-    await update.message.reply_text(get_text("q_medication"))
-    return Q_MEDICATION
-
-
-async def q_medication(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Combined diagnosis + medication question (was two separate steps)."""
     user_id = update.effective_user.id
     storage.save_user(
         user_id,
         {
-            "medication": update.message.text.strip(),
+            "diagnosis": update.message.text.strip(),
+            "medication": "—",
             "questionnaire_done": True,
             "sessions_completed": 0,
             "sessions_cancelled": 0,
@@ -86,7 +101,6 @@ async def q_medication(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
             "package_offered": False,
         },
     )
-    # Persistent bottom menu appears now — user sees all 4 sections at once.
     await update.message.reply_text(get_text("q_saved"), reply_markup=main_menu_keyboard())
     return ConversationHandler.END
 
@@ -97,7 +111,6 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 
 async def already_in_anketa(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Silent-ish guard: /start mid-anketa doesn't re-enter the conversation."""
     await update.message.reply_text(get_text("anketa_in_progress"))
 
 
@@ -105,12 +118,12 @@ def build_start_conversation() -> ConversationHandler:
     return ConversationHandler(
         entry_points=[CommandHandler("start", start)],
         states={
+            Q_CLIENT_TYPE: [CallbackQueryHandler(on_client_type, pattern=r"^ct:")],
             Q_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, q_name)],
             Q_AGE: [MessageHandler(filters.TEXT & ~filters.COMMAND, q_age)],
             Q_REQUEST: [MessageHandler(filters.TEXT & ~filters.COMMAND, q_request)],
             Q_EXPERIENCE: [MessageHandler(filters.TEXT & ~filters.COMMAND, q_experience)],
             Q_DIAGNOSIS: [MessageHandler(filters.TEXT & ~filters.COMMAND, q_diagnosis)],
-            Q_MEDICATION: [MessageHandler(filters.TEXT & ~filters.COMMAND, q_medication)],
         },
         fallbacks=[
             CommandHandler("cancel", cancel),
@@ -123,19 +136,13 @@ def build_start_conversation() -> ConversationHandler:
 
 
 # ---------------------------------------------------------------------------
-# Profile / help (callable from /commands or the text router)
+# Profile / help
 # ---------------------------------------------------------------------------
 
 ACTIVE_STATUSES = {"pending_payment", "waiting_confirm", "confirmed"}
 
 
 async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Profile message = user data + counters + embedded active bookings list.
-
-    Per the product spec, ``Мої записи`` is embedded here so the user can see
-    their status at a glance. The dedicated "📂 Мої записи" menu button still
-    exists and opens the card view with cancel/reschedule buttons.
-    """
     user_id = update.effective_user.id
     user = storage.get_user_with_defaults(user_id)
     if not user or not user.get("questionnaire_done"):
@@ -143,9 +150,7 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     if user.get("package_active"):
-        package_status = get_text(
-            "package_status_active", left=user.get("available_sessions", 0)
-        )
+        package_status = get_text("package_status_active", left=user.get("available_sessions", 0))
     else:
         package_status = get_text("package_status_inactive")
 
@@ -156,7 +161,6 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         request=user.get("request", "—"),
         experience=user.get("experience", "—"),
         diagnosis=user.get("diagnosis", "—"),
-        medication=user.get("medication", "—"),
         sessions_completed=user.get("sessions_completed", 0),
         sessions_cancelled=user.get("sessions_cancelled", 0),
         free_cancellations_left=user.get("free_cancellations_left", storage.FREE_CANCELLATIONS_MAX),
@@ -164,7 +168,6 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         package_status=package_status,
     )
 
-    # Append active bookings so the user sees them inside the profile page.
     active = [
         b for b in storage.list_user_bookings(user_id)
         if b.get("status") in ACTIVE_STATUSES
@@ -181,7 +184,21 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     else:
         text += get_text("profile_bookings_empty")
 
-    await update.message.reply_text(text, reply_markup=main_menu_keyboard())
+    # Package CTA for eligible returning clients.
+    from handlers.payment import CB_PKG_BUY
+    markup = main_menu_keyboard()
+    if (user.get("sessions_completed", 0) >= 3
+            and not user.get("package_active")
+            and user.get("client_type") == "returning"):
+        await update.message.reply_text(text, reply_markup=markup)
+        await update.message.reply_text(
+            get_text("package_offer_card"),
+            reply_markup=InlineKeyboardMarkup(
+                [[InlineKeyboardButton(get_text("btn_buy_package"), callback_data=CB_PKG_BUY)]]
+            ),
+        )
+        return
+    await update.message.reply_text(text, reply_markup=markup)
 
 
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

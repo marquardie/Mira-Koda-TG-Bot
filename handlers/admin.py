@@ -56,6 +56,14 @@ CB_CANCEL = "admin_cancel:"          # admin_cancel:<booking_id>
 CB_RESCH = "admin_resch:"            # admin_resch:<booking_id>
 CB_RESCH_PICK = "admin_resch_pick:"  # admin_resch_pick:<bk_id>:<slot_id>
 
+# Delete client / slot
+CB_DEL_CLIENTS = "admin_del_clients"
+CB_DEL_CLIENT = "admin_del_client:"        # admin_del_client:<user_id>
+CB_DEL_CONFIRM = "admin_del_confirm:"      # admin_del_confirm:<user_id>
+CB_DEL_SLOTS = "admin_del_slots"
+CB_DEL_SLOT = "admin_del_slot:"            # admin_del_slot:<slot_id>
+CB_DEL_SLOT_OK = "admin_del_slot_ok:"      # admin_del_slot_ok:<slot_id>
+
 # Calendar sub-menu
 CB_CALENDAR = "admin_calendar"
 CB_CAL_TODAY = "admin_cal_today"
@@ -191,7 +199,7 @@ async def bookings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 # ---------------------------------------------------------------------------
 
 def _panel_keyboard() -> InlineKeyboardMarkup:
-    """The 5-button main admin panel."""
+    """Main admin panel."""
     return InlineKeyboardMarkup(
         [
             [InlineKeyboardButton(get_text("admin_menu_clients"), callback_data=CB_CLIENTS)],
@@ -199,6 +207,7 @@ def _panel_keyboard() -> InlineKeyboardMarkup:
             [InlineKeyboardButton(get_text("admin_menu_add_slots"), callback_data=CB_ADD_SLOTS)],
             [InlineKeyboardButton(get_text("admin_menu_msg"), callback_data=CB_MESSAGE)],
             [InlineKeyboardButton(get_text("admin_menu_stats"), callback_data=CB_STATS)],
+            [InlineKeyboardButton(get_text("admin_menu_del_client"), callback_data=CB_DEL_CLIENTS)],
         ]
     )
 
@@ -369,6 +378,38 @@ async def handle_admin_callbacks(update: Update, context: ContextTypes.DEFAULT_T
         await q.edit_message_text(get_text("admin_reply_ask_text"))
         return
 
+    # ---- Delete client ----
+    if data == CB_DEL_CLIENTS:
+        await q.answer()
+        await _render_del_clients(update)
+        return
+
+    if data.startswith(CB_DEL_CONFIRM):
+        await q.answer()
+        await _do_delete_user(update, int(data.removeprefix(CB_DEL_CONFIRM)))
+        return
+
+    if data.startswith(CB_DEL_CLIENT):
+        await q.answer()
+        await _confirm_delete_user(update, int(data.removeprefix(CB_DEL_CLIENT)))
+        return
+
+    # ---- Delete slot ----
+    if data == CB_DEL_SLOTS:
+        await q.answer()
+        await _render_del_slots(update)
+        return
+
+    if data.startswith(CB_DEL_SLOT_OK):
+        await q.answer()
+        await _do_delete_slot(update, int(data.removeprefix(CB_DEL_SLOT_OK)))
+        return
+
+    if data.startswith(CB_DEL_SLOT):
+        await q.answer()
+        await _confirm_delete_slot(update, int(data.removeprefix(CB_DEL_SLOT)))
+        return
+
     # Legacy admin_today (backward compat for old messages)
     if data == CB_TODAY:
         await q.answer()
@@ -452,7 +493,6 @@ async def _render_client(update: Update, user_id: int) -> None:
         request=u.get("request", "—"),
         experience=u.get("experience", "—"),
         diagnosis=u.get("diagnosis", "—"),
-        medication=u.get("medication", "—"),
         sessions_completed=u.get("sessions_completed", 0),
         available_sessions=u.get("available_sessions", 0),
         sessions_cancelled=u.get("sessions_cancelled", 0),
@@ -521,6 +561,7 @@ async def _render_add_slots(update: Update) -> None:
         [
             [InlineKeyboardButton(get_text("admin_btn_add_one"), callback_data=CB_ADD_ONE)],
             [InlineKeyboardButton(get_text("admin_btn_add_range"), callback_data=CB_ADD_RANGE)],
+            [InlineKeyboardButton(get_text("admin_btn_del_slots"), callback_data=CB_DEL_SLOTS)],
             _back_row(),
         ]
     )
@@ -701,6 +742,120 @@ async def _do_admin_reschedule(
         get_text("admin_resch_success", id=booking_id, slot=slot_human),
         reply_markup=InlineKeyboardMarkup([_back_row()]),
     )
+
+
+# ---------------------------------------------------------------------------
+# Delete client
+# ---------------------------------------------------------------------------
+
+async def _render_del_clients(update: Update) -> None:
+    q = update.callback_query
+    clients = _all_clients()
+    if not clients:
+        await q.edit_message_text(
+            get_text("admin_clients_empty"), reply_markup=InlineKeyboardMarkup([_back_row()])
+        )
+        return
+    kb = []
+    for uid, u in clients:
+        label = f"🗑 {u.get('name', f'id {uid}')}"[:40]
+        kb.append([InlineKeyboardButton(label, callback_data=f"{CB_DEL_CLIENT}{uid}")])
+    kb.append(_back_row())
+    await q.edit_message_text(get_text("admin_del_clients_title"), reply_markup=InlineKeyboardMarkup(kb))
+
+
+async def _confirm_delete_user(update: Update, user_id: int) -> None:
+    q = update.callback_query
+    user = storage.get_user(user_id) or {}
+    kb = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(get_text("admin_btn_del_confirm"),
+                                 callback_data=f"{CB_DEL_CONFIRM}{user_id}"),
+            InlineKeyboardButton(get_text("admin_btn_del_cancel"), callback_data=CB_DEL_CLIENTS),
+        ]
+    ])
+    await q.edit_message_text(
+        get_text("admin_del_confirm_prompt",
+                 name=user.get("name", "—"), user_id=user_id),
+        reply_markup=kb,
+    )
+
+
+async def _do_delete_user(update: Update, user_id: int) -> None:
+    q = update.callback_query
+    if storage.delete_user(user_id):
+        logger.info("admin deleted user=%s", user_id)
+        await q.edit_message_text(
+            get_text("admin_del_done"),
+            reply_markup=InlineKeyboardMarkup([_back_row()]),
+        )
+    else:
+        await q.edit_message_text(
+            get_text("admin_del_not_found"),
+            reply_markup=InlineKeyboardMarkup([_back_row()]),
+        )
+
+
+# ---------------------------------------------------------------------------
+# Delete slot
+# ---------------------------------------------------------------------------
+
+async def _render_del_slots(update: Update) -> None:
+    from handlers.common import format_slot_human
+
+    q = update.callback_query
+    slots = storage.list_slots()
+    if not slots:
+        await q.edit_message_text(
+            get_text("slots_list_empty"), reply_markup=InlineKeyboardMarkup([_back_row(CB_ADD_SLOTS)])
+        )
+        return
+    kb = []
+    for s in slots:
+        status = "🔴" if s.get("booked") else "🟢"
+        label = f"{status} {format_slot_human(s['datetime'])}"[:40]
+        kb.append([InlineKeyboardButton(label, callback_data=f"{CB_DEL_SLOT}{s['id']}")])
+    kb.append(_back_row(CB_ADD_SLOTS))
+    await q.edit_message_text(get_text("admin_del_slots_title"), reply_markup=InlineKeyboardMarkup(kb))
+
+
+async def _confirm_delete_slot(update: Update, slot_id: int) -> None:
+    from handlers.common import format_slot_human
+
+    q = update.callback_query
+    slot = storage.get_slot(slot_id)
+    if not slot:
+        await q.edit_message_text(
+            get_text("slot_not_found"),
+            reply_markup=InlineKeyboardMarkup([_back_row(CB_DEL_SLOTS)]),
+        )
+        return
+    kb = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(get_text("admin_btn_del_confirm"),
+                                 callback_data=f"{CB_DEL_SLOT_OK}{slot_id}"),
+            InlineKeyboardButton(get_text("admin_btn_del_cancel"), callback_data=CB_DEL_SLOTS),
+        ]
+    ])
+    await q.edit_message_text(
+        get_text("admin_del_slot_confirm", slot=format_slot_human(slot["datetime"])),
+        reply_markup=kb,
+    )
+
+
+async def _do_delete_slot(update: Update, slot_id: int) -> None:
+    q = update.callback_query
+    if storage.delete_slot(slot_id):
+        logger.info("admin deleted slot=%s", slot_id)
+        await q.edit_message_text(
+            get_text("admin_del_slot_done"),
+            reply_markup=InlineKeyboardMarkup([_back_row(CB_ADD_SLOTS)]),
+        )
+    else:
+        await q.edit_message_text(
+            get_text("slot_not_found"),
+            reply_markup=InlineKeyboardMarkup([_back_row(CB_ADD_SLOTS)]),
+        )
 
 
 # ---------------------------------------------------------------------------

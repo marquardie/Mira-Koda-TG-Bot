@@ -1,12 +1,1 @@
-{
-  "_seq": 1,
-  "items": {
-    "1": {
-      "id": 1,
-      "user_id": 1168672386,
-      "slot_id": 1,
-      "status": "cancelled",
-      "payment_method": "PayPal"
-    }
-  }
-}
+{"_seq":0,"items":{}}

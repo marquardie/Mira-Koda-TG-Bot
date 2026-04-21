@@ -256,6 +256,25 @@ def get_user_with_defaults(user_id: int) -> dict[str, Any] | None:
     return _with_defaults(u) if u else None
 
 
+def delete_user(user_id: int) -> bool:
+    """Remove a user from storage and cancel their active bookings.
+
+    Freed slots become available for rebooking.  Returns ``False`` if the
+    user didn't exist.
+    """
+    with _lock:
+        users = _read_json(USERS_FILE)
+        if str(user_id) not in users:
+            return False
+        del users[str(user_id)]
+        _write_json(USERS_FILE, users)
+    for b in list_user_bookings(user_id):
+        if b.get("status") in ("pending_payment", "waiting_confirm", "confirmed"):
+            update_booking(b["id"], status="cancelled")
+            mark_slot_booked(b["slot_id"], False)
+    return True
+
+
 # ---------------------------------------------------------------------------
 # Slots
 # ---------------------------------------------------------------------------

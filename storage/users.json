@@ -1,18 +1,1 @@
-{
-  "1168672386": {
-    "tg_username": "marquardie",
-    "questionnaire_done": true,
-    "name": "Настя",
-    "age": 29,
-    "request": "12",
-    "experience": "12",
-    "diagnosis": "12",
-    "medication": "12",
-    "sessions_completed": 0,
-    "sessions_cancelled": 0,
-    "free_cancellations_left": 2,
-    "available_sessions": 0,
-    "last_payment_date": null,
-    "package_offered": false
-  }
-}
+{}

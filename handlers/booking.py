@@ -582,10 +582,11 @@ async def on_menu_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         await finalize_payment_comment(update, context, text)
         return
 
-    # (4) Free-form text outside any active flow → forward to admin as a
-    #     client message (respecting working hours).
+    # (4) Free-form text outside any active flow.
+    # Client messages are disabled — only menu buttons and guided flows work.
+    # Admin's text still reaches here via awaiting-states (steps 2-3 above).
     if text and storage.user_exists(update.effective_user.id):
-        await _forward_client_message(update, context, text)
+        await update.message.reply_text(get_text("use_buttons_hint"), reply_markup=main_menu_keyboard())
 
 
 # ---------------------------------------------------------------------------
