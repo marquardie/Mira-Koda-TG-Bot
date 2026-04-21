@@ -47,11 +47,19 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 
 async def on_client_type(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """User picks 'new' or 'returning'. Both paths lead to the questionnaire."""
+    """User picks 'new' or 'returning'. Both paths lead to the questionnaire.
+
+    Also registered as an entry_point so it works even when the in-memory
+    conversation state was lost after a server restart.
+    """
     query = update.callback_query
     await query.answer()
+    uid = update.effective_user.id
+    # Guard: if bot restarted before user record was saved, create it now.
+    if not storage.get_user(uid):
+        storage.save_user(uid, {"tg_username": update.effective_user.username or "", "questionnaire_done": False})
     client_type = "returning" if query.data == CB_RETURNING_CLIENT else "new"
-    storage.save_user(update.effective_user.id, {"client_type": client_type})
+    storage.save_user(uid, {"client_type": client_type})
     await query.edit_message_text(get_text("q_name"))
     return Q_NAME
 
@@ -116,7 +124,10 @@ async def already_in_anketa(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
 def build_start_conversation() -> ConversationHandler:
     return ConversationHandler(
-        entry_points=[CommandHandler("start", start)],
+        entry_points=[
+            CommandHandler("start", start),
+            CallbackQueryHandler(on_client_type, pattern=r"^ct:"),
+        ],
         states={
             Q_CLIENT_TYPE: [CallbackQueryHandler(on_client_type, pattern=r"^ct:")],
             Q_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, q_name)],
