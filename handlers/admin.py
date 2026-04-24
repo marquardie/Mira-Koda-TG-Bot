@@ -130,6 +130,8 @@ async def slots_add(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def slots_list(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    from handlers.common import format_slot_human
+
     if await _reject_non_admin_msg(update):
         return
     slots = storage.list_slots()
@@ -139,7 +141,9 @@ async def slots_list(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     lines = [get_text("slots_list_header")]
     for s in slots:
         status = get_text("slot_status_busy") if s["booked"] else get_text("slot_status_free")
-        lines.append(get_text("slots_list_line", id=s["id"], slot=s["datetime"], status=status))
+        lines.append(
+            get_text("slots_list_line", id=s["id"], slot=format_slot_human(s["datetime"]), status=status)
+        )
     await update.message.reply_text("\n".join(lines))
 
 
@@ -174,6 +178,8 @@ async def send_to_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 
 async def bookings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    from handlers.common import format_slot_human
+
     if await _reject_non_admin_msg(update):
         return
     items = storage.list_all_bookings()
@@ -187,11 +193,22 @@ async def bookings(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         lines.append(
             get_text(
                 "bookings_line",
-                id=b["id"], slot=slot.get("datetime", "—"),
+                id=b["id"], slot=format_slot_human(slot.get("datetime", "—")),
                 name=user.get("name", "—"), user_id=b["user_id"], status=b["status"],
             )
         )
     await update.message.reply_text("\n".join(lines))
+
+
+async def reload_bot_texts(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    from services.texts import reload_texts
+
+    if await _reject_non_admin_msg(update):
+        return
+    counts = reload_texts()
+    await update.message.reply_text(
+        get_text("admin_texts_reloaded", local=counts["local"], google=counts["google"])
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1184,6 +1201,7 @@ async def _range_on_step(update, context, text: str) -> None:
 def register(app) -> None:
     # Inline admin UI
     app.add_handler(CommandHandler("admin", open_admin_menu))
+    app.add_handler(CommandHandler("reload_texts", reload_bot_texts))
     app.add_handler(CallbackQueryHandler(handle_admin_callbacks, pattern="^admin_"))
 
     # Legacy CLI commands (still available as shortcuts)

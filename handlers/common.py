@@ -99,16 +99,20 @@ def status_text(status: str) -> str:
 # Ukrainian-friendly date formatting
 # ---------------------------------------------------------------------------
 
-UA_MONTHS_GEN = {
-    1: "січня", 2: "лютого", 3: "березня", 4: "квітня",
-    5: "травня", 6: "червня", 7: "липня", 8: "серпня",
-    9: "вересня", 10: "жовтня", 11: "листопада", 12: "грудня",
+UA_WEEKDAYS = {
+    0: "Понеділок",
+    1: "Вівторок",
+    2: "Середа",
+    3: "Четвер",
+    4: "Пʼятниця",
+    5: "Субота",
+    6: "Неділя",
 }
 
 
 def format_slot_human(slot_str: str) -> str:
-    """Convert a raw slot string to "17 квітня о 12:00"."""
+    """Convert a raw slot string to "Понеділок 20.05 о 17:00"."""
     dt = storage.parse_slot(slot_str)
     if dt is None:
         return slot_str
-    return f"{dt.day} {UA_MONTHS_GEN[dt.month]} о {dt.strftime('%H:%M')}"
+    return f"{UA_WEEKDAYS[dt.weekday()]} {dt.strftime('%d.%m')} о {dt.strftime('%H:%M')}"

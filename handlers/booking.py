@@ -18,8 +18,7 @@ back                                         → on_back (return to main menu)
 The module also owns the **text router** (``on_menu_text``) — a single
 MessageHandler that:
 * matches the 4 main-menu button labels and dispatches them,
-* intercepts awaited text input (cancel reason / payment ПІБ) via
-  ``context.user_data``.
+* intercepts awaited text input (cancel reason) via ``context.user_data``.
 """
 from __future__ import annotations
 
@@ -538,10 +537,6 @@ async def _forward_client_message(
 
 async def on_menu_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     from handlers.admin import handle_text_if_admin_awaiting
-    from handlers.payment import (
-        AWAIT_PAYMENT_COMMENT,
-        finalize_payment_comment,
-    )
 
     # Guard: if user hasn't finished the questionnaire, they belong to the
     # ConversationHandler. If we land here it means conversation state was
@@ -583,9 +578,6 @@ async def on_menu_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     awaiting = context.user_data.get(AWAIT_KEY)
     if awaiting == AWAIT_CANCEL_REASON:
         await _handle_cancel_reason_input(update, context, text)
-        return
-    if awaiting == AWAIT_PAYMENT_COMMENT:
-        await finalize_payment_comment(update, context, text)
         return
 
     # (4) Free-form text outside any active flow.

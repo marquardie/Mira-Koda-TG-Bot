@@ -65,12 +65,12 @@ def to_storage_format(dt: datetime) -> str:
 
 
 def _ensure_storage() -> None:
-    STORAGE_DIR.mkdir(parents=True, exist_ok=True)
     for path, default in (
         (USERS_FILE, {}),
         (BOOKINGS_FILE, {"_seq": 0, "items": {}}),
         (SLOTS_FILE, {"_seq": 0, "items": {}}),
     ):
+        path.parent.mkdir(parents=True, exist_ok=True)
         if not path.exists():
             _write_json(path, default)
 

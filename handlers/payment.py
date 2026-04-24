@@ -1,21 +1,4 @@
-"""Payment flows for sessions AND packages.
-
-Session payment sequence:
-    user picks slot → on_confirm reserves the slot →
-    start_payment_method_picker shows PayPal / Monobank / Back →
-    method chosen → method-specific instructions + "Я оплатив" button →
-    user clicks → ask for ПІБ →
-    user sends ПІБ → admin notified with method+ПІБ →
-    admin confirms → +1 available_sessions, schedule reminder/session_end.
-
-Package payment sequence (offered after the 3rd session):
-    "💼 Оформити пакет" button → method picker → реквізити →
-    "Я оплатив пакет" → ПІБ → admin → on confirm: activate_package(+4 sessions).
-
-Both flows share a single ``awaiting`` slot (``payment_comment``) — the
-``payment_kind`` flag in user_data tells the comment-handler whether it's a
-session (``session``) or package (``package``) payment.
-"""
+"""Payment flows for sessions AND packages."""
 from __future__ import annotations
 
 import logging
@@ -30,8 +13,8 @@ from services.texts import get_text
 logger = logging.getLogger(__name__)
 
 # ---- session payment callbacks --------------------------------------------
-CB_METHOD = "pmt_method:"           # pmt_method:<paypal|mono>:<booking_id>
-CB_PAID = "paid:"                    # paid:<booking_id>
+CB_METHOD = "pmt_method:"            # pmt_method:<paypal|mono>:<booking_id>
+CB_PAID = "payment_done:"            # payment_done:<booking_id>
 CB_ADMIN_CONFIRM = "adm_ok:"         # adm_ok:<booking_id>
 CB_ADMIN_REJECT = "adm_no:"          # adm_no:<booking_id>
 
@@ -42,11 +25,6 @@ CB_PKG_PAID = "pkg_paid"
 CB_PKG_ADMIN_OK = "pkg_adm_ok:"      # pkg_adm_ok:<user_id>
 CB_PKG_ADMIN_NO = "pkg_adm_no:"      # pkg_adm_no:<user_id>
 
-# user_data keys used by the shared text router (handlers.booking.on_menu_text).
-AWAIT_KEY = "awaiting"
-AWAIT_PAYMENT_COMMENT = "payment_comment"
-PAYMENT_BK_KEY = "payment_bk_id"
-PAYMENT_KIND_KEY = "payment_kind"     # "session" | "package"
 PAYMENT_METHOD_KEY = "payment_method" # cached for admin notice
 
 
@@ -87,7 +65,7 @@ def _method_instructions(method_key: str, package: bool) -> str:
 
 
 async def on_method_chosen(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """User picked a payment method → show реквізити + 'Я оплатив' button."""
+    """User picked a payment method → show реквізити + payment button."""
     query = update.callback_query
     await query.answer()
 
@@ -116,7 +94,7 @@ async def on_method_chosen(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
 
 # ---------------------------------------------------------------------------
-# Session payment — "Я оплатив" → ask for ПІБ
+# Session payment — "Оплата є" → notify admin
 # ---------------------------------------------------------------------------
 
 async def on_paid(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -132,46 +110,15 @@ async def on_paid(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await query.edit_message_text(get_text("payment_waiting_admin"))
         return
 
-    context.user_data[AWAIT_KEY] = AWAIT_PAYMENT_COMMENT
-    context.user_data[PAYMENT_BK_KEY] = booking_id
-    context.user_data[PAYMENT_KIND_KEY] = "session"
-    await query.edit_message_text(get_text("payment_comment_prompt"))
-
-
-async def finalize_payment_comment(
-    update: Update, context: ContextTypes.DEFAULT_TYPE, comment: str
-) -> None:
-    """Called by handlers.booking text router with the user's ПІБ line.
-
-    Branches by ``payment_kind`` (session vs package).
-    """
-    kind = context.user_data.pop(PAYMENT_KIND_KEY, "session")
-    context.user_data[AWAIT_KEY] = None
-
-    if kind == "package":
-        await _finalize_package_comment(update, context, comment)
-        return
-    await _finalize_session_comment(update, context, comment)
-
-
-async def _finalize_session_comment(
-    update: Update, context: ContextTypes.DEFAULT_TYPE, comment: str
-) -> None:
-    booking_id = context.user_data.pop(PAYMENT_BK_KEY, None)
-    if not booking_id:
-        return
-    booking = storage.get_booking(booking_id)
-    if not booking or booking["status"] != "pending_payment":
-        await update.message.reply_text(get_text("payment_waiting_admin"))
-        return
-
-    storage.update_booking(booking_id, payment_comment=comment, status="waiting_confirm")
+    booking = storage.update_booking(booking_id, status="waiting_confirm")
     logger.info("payment claimed booking=%s user=%s", booking_id, booking["user_id"])
-    await update.message.reply_text(get_text("payment_comment_saved"))
+    await query.edit_message_text(get_text("payment_waiting_admin"))
 
     user = storage.get_user(booking["user_id"]) or {}
     slot = storage.get_slot(booking["slot_id"]) or {}
     method = booking.get("payment_method", "—")
+    from handlers.common import format_slot_human
+
     admin_keyboard = InlineKeyboardMarkup(
         [
             [
@@ -192,8 +139,7 @@ async def _finalize_session_comment(
             age=user.get("age", "—"),
             request=user.get("request", "—"),
             method=method,
-            payment_comment=comment,
-            slot=slot.get("datetime", "—"),
+            slot=format_slot_human(slot.get("datetime", "—")),
             sessions_count=user.get("sessions_completed", user.get("sessions_count", 0)),
         ),
         reply_markup=admin_keyboard,
@@ -328,19 +274,9 @@ async def on_package_paid(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await query.edit_message_text(get_text("package_already_active"))
         return
 
-    # Arm the text router for the ПІБ input — branch=package.
-    context.user_data[AWAIT_KEY] = AWAIT_PAYMENT_COMMENT
-    context.user_data[PAYMENT_KIND_KEY] = "package"
-    await query.edit_message_text(get_text("package_comment_prompt"))
-
-
-async def _finalize_package_comment(
-    update: Update, context: ContextTypes.DEFAULT_TYPE, comment: str
-) -> None:
     user = storage.get_user(update.effective_user.id) or {}
     method = context.user_data.pop(PAYMENT_METHOD_KEY, "—")
-
-    await update.message.reply_text(get_text("package_received_pending"))
+    await query.edit_message_text(get_text("package_received_pending"))
 
     admin_keyboard = InlineKeyboardMarkup(
         [
@@ -360,7 +296,6 @@ async def _finalize_package_comment(
             user_id=update.effective_user.id,
             name=user.get("name", "—"),
             method=method,
-            comment=comment,
         ),
         reply_markup=admin_keyboard,
     )
