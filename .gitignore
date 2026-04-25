@@ -209,3 +209,12 @@ data/*.json
 users.json
 slots.json
 bookings.json
+
+
+# Google keys
+*service-account*.json
+*key*.json
+*credentials*.json
+
+# Backups
+*_backup.json
